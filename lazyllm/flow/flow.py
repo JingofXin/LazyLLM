@@ -30,6 +30,14 @@ def _is_function(f):
                           types.BuiltinMethodType, types.MethodType, types.LambdaType))
 
 class FlowBase(metaclass=_MetaBind):
+    '''
+    功能：
+    - 存放元素（元素有无key名字都支持）：
+        - 初始化时候作为参数传入；
+        - 上下文的时候使用`.`设置；
+    - 通过`.`+key访问存放的元素
+    - 处理同为 FlowBase 对象的元素时，为其添加父亲对象，
+    '''
     def __init__(self, *items, item_names=[], auto_capture=False) -> None:
         self._father = None
         self._items, self._item_names = [], []
@@ -51,6 +59,9 @@ class FlowBase(metaclass=_MetaBind):
         if k: self._item_names.append(k)
         if self._curr_frame and isinstance(v, FlowBase):
             if k not in self._curr_frame.f_locals:
+                # 将嵌套上下文中的flow对象塞回调用者的局部变量字典中。
+                # 如果不塞回，那么with pippeline() as ppl.ppl2：下就不能用ppl2了，要ppl.ppl2才行。
+                # 这里相当于把 ppl2 塞回到 ppl 的局部变量字典中。
                 self._curr_frame.f_locals[k] = v
             else:
                 lazyllm.LOG.warning(f'{k} is already defined in this scope, ignor it')
