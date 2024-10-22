@@ -395,6 +395,9 @@ class ActionModule(ModuleBase):
         if isinstance(self.action, FlowBase):
             submodule = []
             self.action.for_each(lambda x: isinstance(x, ModuleBase), lambda x: submodule.append(x))
+            for m in submodule:
+                if m not in self._submodules:
+                    self._submodules.append(m)
             return submodule
         return super().submodules
 
