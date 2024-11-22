@@ -166,8 +166,8 @@ def openai2alpaca(data: DatasetDict) -> list:
         if system:
             alpaca_item["system"] = system
         alpaca_item["instruction"] = instruction
-        if inp or system:  # 'or system' fix llama-factory-bug: system must have input
-            alpaca_item["input"] = inp
+        # if inp or system:  # 'or system' fix llama-factory-bug: system must have input
+        alpaca_item["input"] = inp
         alpaca_item["output"] = output
         if history:
             alpaca_item["history"] = history
