@@ -42,15 +42,17 @@ jobs:
             cp -r cache_result/* workspace_result/
           fi
           echo "MY_PATH=$(realpath workspace_result)" >> $GITHUB_ENV
+          ls workspace_result -alh
       - name: Exe func
         id: exe_func
         run: |
           echo $MY_PATH
-          python -c "print('ok!')" >workspace_result/info.log 2>&1
+          python -c "print('ok!')" >workspace_result/info2.log 2>&1
       - name: Success branch
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
         run: |
           echo "✅ Function executed successfully!"
+          ls workspace_result -alh
       - name: Success upload cache
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
         uses: actions/cache@v4
