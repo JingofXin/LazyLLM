@@ -31,7 +31,7 @@ jobs:
           echo $MY_VAR
       - name: Restore cache
         id: cache-restore
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: cache_result/
           key: python-result-cache-main
@@ -55,8 +55,7 @@ jobs:
           ls workspace_result -alh
       - name: Success upload cache
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
-        uses: actions/cache@v4
-        save-always: true
+        uses: actions/cache/save@v4
         with:
           path: workspace_result/
           key: python-result-cache-main
