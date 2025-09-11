@@ -17,8 +17,8 @@ jobs:
       - name: Show run attempt
         run: echo "GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
       - name: Conditional step if rerun
-        if: ${{ env.GITHUB_RUN_ATTEMPT != '1' }}
+        if: ${{ github.run_attempt != 1 }}
         run: echo "This is a re-run! (GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT})"
       - name: Conditional step if first run
-        if: ${{ env.GITHUB_RUN_ATTEMPT == '1' }}
+        if: ${{ github.run_attempt == 1 }}
         run: echo "This is the first run."
