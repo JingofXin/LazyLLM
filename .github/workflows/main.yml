@@ -29,3 +29,15 @@ jobs:
       - name: Show ENV
         run: |
           echo $MY_VAR
+      - name: Exe func
+        id: exe_func
+        run: |
+          python -c "print('ok!')"
+      - name: Success branch
+        if: ${{ success() && steps.exe_func.conclusion == 'success' }}
+        run: |
+          echo "✅ Function executed successfully!"
+      - name: Failure branch
+        if: ${{ failure() && steps.exe_func.conclusion == 'failure' }}
+        run: |
+          echo "❌ Function execution failed!"
