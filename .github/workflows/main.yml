@@ -32,7 +32,7 @@ jobs:
       - name: Exe func
         id: exe_func
         run: |
-          python -c "print('ok!')"
+          python -m "print('ok!')"
       - name: Success branch
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
         run: |
