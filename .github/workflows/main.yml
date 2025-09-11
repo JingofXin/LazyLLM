@@ -29,14 +29,34 @@ jobs:
       - name: Show ENV
         run: |
           echo $MY_VAR
+      - name: Restore cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: cache_result/
+          key: python-result-cache-main
+      - name: Prepare workspace
+        run: |
+          mkdir -p workspace_result
+          if [ -d cache_result ]; then
+            cp -r cache_result/* workspace_result/
+          fi
+          echo "MY_PATH=$(realpath workspace_result)" >> $GITHUB_ENV
       - name: Exe func
         id: exe_func
         run: |
-          python -m "print('ok!')"
+          echo $MY_PATH
+          python -c "print('ok!')" >workspace_result/info.log 2>&1
       - name: Success branch
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
         run: |
           echo "✅ Function executed successfully!"
+      - name: Success upload cache
+        if: ${{ success() && steps.exe_func.conclusion == 'success' }}
+        uses: actions/cache@v4
+        with:
+          path: workspace_result/
+          key: python-result-cache-main
       - name: Failure branch
         if: ${{ failure() && steps.exe_func.conclusion == 'failure' }}
         run: |
