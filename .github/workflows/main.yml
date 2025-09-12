@@ -84,12 +84,12 @@ jobs:
         id: exe_func
         run: |
           echo $MY_PATH
-          python -c "print('ok!')" >workspace_result/info2.log 2>&1
+          python -c "print('ok!')" >cache_result/info2.log 2>&1
       - name: Success branch
         if: ${{ success() && steps.exe_func.conclusion == 'success' }}
         run: |
           echo "✅ Function executed successfully!"
-          ls workspace_result -alh
+          ls cache_result -alh
       - name: Failure branch
         if: ${{ failure() && steps.exe_func.conclusion == 'failure' }}
         run: |
@@ -99,5 +99,5 @@ jobs:
         if: ${{ success() && steps.exe_func.conclusion == 'success' && github.event_name == 'push' }}
         uses: actions/cache/save@v4
         with:
-          path: workspace_result/
+          path: cache_result/
           key: python-result-cache-${{ env.CURRENT_SHA }}
