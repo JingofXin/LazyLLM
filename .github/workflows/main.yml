@@ -9,11 +9,54 @@ on:
       - ".git*"
       - "docs/assets/**"
       - "docs/**"
+  pull_request:
+    branches:
+      - sxy/workflow
+    paths-ignore:
+      - "**.md"
+      - ".git*"
+      - "docs/assets/**"
+      - "docs/**"
+
 
 jobs:
   check-rerun:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 必须设置为 0 才能获取上一个提交
+
+      - name: Get SHAs
+        id: get_shas
+        run: |
+          CURRENT_SHA=$(git rev-parse HEAD)
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            PREVIOUS_SHA=$(git rev-parse HEAD^)
+          else
+            PREVIOUS_SHA=$CURRENT_SHA
+          fi
+          echo "CURRENT_SHA=$CURRENT_SHA" >> $GITHUB_ENV
+          echo "PREVIOUS_SHA=$PREVIOUS_SHA" >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+          fi
+      - name: Restore Cache (Push)
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: cache_result/
+          key: python-result-cache-${{ env.PREVIOUS_SHA }}
+
+      - name: Restore Cache (Pull Request)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: cache_result/
+          key: python-result-cache-${{ env.BASE_SHA }}
+
       - name: Show run attempt
         run: echo "GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
       - name: Conditional step if rerun
@@ -29,12 +72,6 @@ jobs:
       - name: Show ENV
         run: |
           echo $MY_VAR
-      - name: Restore cache
-        id: cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: cache_result/
-          key: python-result-cache-main
       - name: Prepare workspace
         run: |
           mkdir -p workspace_result
@@ -53,13 +90,14 @@ jobs:
         run: |
           echo "✅ Function executed successfully!"
           ls workspace_result -alh
-      - name: Success upload cache
-        if: ${{ success() && steps.exe_func.conclusion == 'success' }}
-        uses: actions/cache/save@v4
-        with:
-          path: workspace_result/
-          key: python-result-cache-main
       - name: Failure branch
         if: ${{ failure() && steps.exe_func.conclusion == 'failure' }}
         run: |
           echo "❌ Function execution failed!"
+
+      - name: Success upload cache (Push)
+        if: ${{ success() && steps.exe_func.conclusion == 'success' && github.event_name == 'push' }}
+        uses: actions/cache/save@v4
+        with:
+          path: workspace_result/
+          key: python-result-cache-${{ env.CURRENT_SHA }}
