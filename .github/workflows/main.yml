@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - sxy/workflow
+      - sxy/workflow2
     paths-ignore:
       - "**.md"
       - ".git*"
@@ -11,7 +11,7 @@ on:
       - "docs/**"
   pull_request:
     branches:
-      - sxy/workflow
+      - sxy/workflow2
     paths-ignore:
       - "**.md"
       - ".git*"
@@ -28,8 +28,37 @@ jobs:
         with:
           fetch-depth: 0 # test2
 
+      - name: Create Output and Cache Directories
+        run: |
+          mkdir -p github_cache
+          mkdir -p github_cache/output
+          mkdir -p github_cache/paid_llm_cache
+          echo "LAZYLLM_TEMP_DIR=github_cache/output" >> $GITHUB_ENV
+          echo "LAZYLLM_CACHE_DIR=github_cache/paid_llm_cache" >> $GITHUB_ENV
+
+      - name: Set Cache Mode Based on Run Context
+        run: |
+          echo "GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
+          echo "LAZYLLM_CACHE_ONLINE_MODULE=True" >> $GITHUB_ENV
+          if [ "$GITHUB_RUN_ATTEMPT" = "1" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "This is the first run, and push to main branch."
+            echo "LAZYLLM_CACHE_MODE=RW" >> $GITHUB_ENV
+          elif [ "$GITHUB_RUN_ATTEMPT" != "1" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "This is a re-run! (GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT), and push to main branch."
+            echo "LAZYLLM_CACHE_MODE=WO" >> $GITHUB_ENV
+          elif [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "This is a pull request from other branch to main."
+            echo "LAZYLLM_CACHE_MODE=RO" >> $GITHUB_ENV
+          fi
+
+      - name: Show ENV
+        run: |
+          echo "LAZYLLM_TEMP_DIR: $LAZYLLM_TEMP_DIR"
+          echo "LAZYLLM_CACHE_DIR: $LAZYLLM_CACHE_DIR"
+          echo "LAZYLLM_CACHE_MODE: $LAZYLLM_CACHE_MODE"
+          echo "LAZYLLM_CACHE_ONLINE_MODULE: $LAZYLLM_CACHE_ONLINE_MODULE"
+
       - name: Get SHAs
-        id: get_shas
         run: |
           CURRENT_SHA=$(git rev-parse HEAD)
           if git rev-parse HEAD^ >/dev/null 2>&1; then
@@ -39,61 +68,115 @@ jobs:
           fi
           echo "CURRENT_SHA=$CURRENT_SHA" >> $GITHUB_ENV
           echo "PREVIOUS_SHA=$PREVIOUS_SHA" >> $GITHUB_ENV
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
           fi
+
       - name: Restore Cache (Push)
         if: ${{ github.event_name == 'push' }}
         uses: actions/cache@v4
         with:
-          path: cache_result/
+          path: github_cache/
           key: python-result-cache-${{ env.PREVIOUS_SHA }}
 
       - name: Restore Cache (Pull Request)
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/cache@v4
         with:
-          path: cache_result/
+          path: github_cache/
           key: python-result-cache-${{ env.BASE_SHA }}
 
-      - name: Show run attempt
-        run: echo "GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
-      - name: Conditional step if rerun
-        if: ${{ github.run_attempt != 1 }}
+      - name: RunTests
+        id: exe_ci
         run: |
-          echo "This is a re-run! (GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT})"
-          echo "MY_VAR=seconds" >> $GITHUB_ENV
-      - name: Conditional step if first run
-        if: ${{ github.run_attempt == 1 }}
-        run: |
-          echo "This is the first run."
-          echo "MY_VAR=first" >> $GITHUB_ENV
-      - name: Show ENV
-        run: |
-          echo $MY_VAR
-      - name: Prepare workspace
-        run: |
-          mkdir -p cache_result
-          ls cache_result -alh
-      - name: Exe func
-        id: exe_func
-        run: |
-          echo $MY_PATH
-          python -c "print('ok!')" >cache_result/info2.log 2>&1
-      - name: Success branch
-        if: ${{ success() && steps.exe_func.conclusion == 'success' }}
-        run: |
-          echo "✅ Function executed successfully!"
-          ls cache_result -alh
-      - name: Failure branch
-        if: ${{ failure() && steps.exe_func.conclusion == 'failure' }}
-        run: |
-          echo "❌ Function execution failed!"
-
-      - name: Success upload cache (Push)
-        if: ${{ success() && steps.exe_func.conclusion == 'success' && github.event_name == 'push' }}
+          cat > test_cache_validation.py << 'EOF'
+          import os
+          import json
+          import pickle
+          from pathlib import Path
+          
+          # 获取环境变量
+          temp_dir = os.getenv('LAZYLLM_TEMP_DIR', 'Null')
+          cache_dir = os.getenv('LAZYLLM_CACHE_DIR', 'Null')
+          cache_mode = os.getenv('LAZYLLM_CACHE_MODE', 'Null')
+          cache_online = os.getenv('LAZYLLM_CACHE_ONLINE_MODULE', 'Null')
+          
+          print(f"Environment Variables:")
+          print(f"LAZYLLM_TEMP_DIR: {temp_dir}")
+          print(f"LAZYLLM_CACHE_DIR: {cache_dir}")
+          print(f"LAZYLLM_CACHE_MODE: {cache_mode}")
+          print(f"LAZYLLM_CACHE_ONLINE_MODULE: {cache_online}")
+          
+          # 创建目录（如果不存在）
+          Path(temp_dir).mkdir(parents=True, exist_ok=True)
+          Path(cache_dir).mkdir(parents=True, exist_ok=True)
+          
+          # 在temp目录中创建测试文件
+          test_data = {
+              'cache_mode': cache_mode,
+              'cache_online': cache_online,
+              'test_message': 'This is a test file generated by GitHub Actions',
+          }
+          
+          # 写入JSON文件到temp目录
+          temp_file = Path(temp_dir) / 'test_result.json'
+          with open(temp_file, 'w') as f:
+              json.dump(test_data, f, indent=2)
+          
+          print(f"Created test file: {temp_file}")
+          
+          # 在cache目录中创建模拟的LLM缓存数据
+          if cache_mode in ['RW', 'WO']:
+              cache_data = {
+                  'model': 'test-model',
+                  'prompt': 'Hello, world!',
+                  'response': 'This is a cached response',
+                  'timestamp': '2024-01-01T00:00:00Z'
+              }
+              
+              cache_file = Path(cache_dir) / 'test_cache.pkl'
+              with open(cache_file, 'wb') as f:
+                  pickle.dump(cache_data, f)
+              
+              print(f"Created cache file: {cache_file}")
+              print(f"Cache mode {cache_mode} allows writing to cache")
+          elif cache_mode == 'RO':
+              print("Cache mode is RO (Read-Only), skipping cache writing")
+          else:
+              print(f"Unknown cache mode: {cache_mode}")
+          
+          # 验证文件是否创建成功
+          temp_exists = temp_file.exists()
+          cache_exists = cache_mode in ['RW', 'WO'] and (Path(cache_dir) / 'test_cache.pkl').exists()
+          
+          print(f"\nValidation Results:")
+          print(f"Temp file created: {temp_exists}")
+          if cache_mode in ['RW', 'WO']:
+              print(f"Cache file created: {cache_exists}")
+          
+          # 读取并显示创建的文件内容（用于调试）
+          if temp_exists:
+              print(f"\nTemp file content:")
+              with open(temp_file, 'r') as f:
+                  print(f.read())
+          
+          # 设置输出供后续步骤使用
+          if temp_exists:
+              print("::set-output name=status::success")
+              print("Test completed successfully!")
+          else:
+              print("::set-output name=status::failure")
+              print("Test failed: temp file was not created")
+              exit(1)
+          EOF
+          python test_cache_validation.py
+          echo "Generated files:"
+          find github_cache -type f -name "*.json" -o -name "*.pkl" | xargs ls -la
+          
+      - name: Success On Main Branch
+        if: ${{ success() && steps.exe_ci.conclusion == 'success' && github.event_name == 'push' }}
         uses: actions/cache/save@v4
         with:
-          path: cache_result/
+          path: github_cache/
           key: python-result-cache-${{ env.CURRENT_SHA }}
