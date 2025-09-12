@@ -74,12 +74,8 @@ jobs:
           echo $MY_VAR
       - name: Prepare workspace
         run: |
-          mkdir -p workspace_result
-          if [ -d cache_result ]; then
-            cp -r cache_result/* workspace_result/
-          fi
-          echo "MY_PATH=$(realpath workspace_result)" >> $GITHUB_ENV
-          ls workspace_result -alh
+          mkdir -p cache_result
+          ls cache_result -alh
       - name: Exe func
         id: exe_func
         run: |
