@@ -45,14 +45,14 @@ jobs:
           fi
       - name: Restore Cache (Push)
         if: ${{ github.event_name == 'push' }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache@v4
         with:
           path: cache_result/
           key: python-result-cache-${{ env.PREVIOUS_SHA }}
 
       - name: Restore Cache (Pull Request)
         if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache@v4
         with:
           path: cache_result/
           key: python-result-cache-${{ env.BASE_SHA }}
