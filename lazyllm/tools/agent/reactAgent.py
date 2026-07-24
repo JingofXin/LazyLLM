@@ -195,35 +195,46 @@ class ReactAgent(LazyLLMAgentBase):
         )
         return summary if summary else None
 
+    def _force_summarize_after_limit(self) -> Optional[str]:
+        if not self._force_summarize:
+            return None
+        try:
+            agent_ctx = locals['_lazyllm_agent']
+        except (KeyError, TypeError):
+            agent_ctx = {}
+        history = agent_ctx.get('workspace', {}).get('history', []) if isinstance(agent_ctx, dict) else []
+        if not history:
+            return None
+        LOG.warning(f'ReactAgent reached max_retries={self._max_retries}, attempting force summarize.')
+        try:
+            summary = self._force_summarize_from_history(history)
+        except Exception as e:
+            LOG.warning(f'ReactAgent force-summarize call failed: {e}')
+            return None
+        if summary is None:
+            return None
+        if self._stream:
+            _write_agent_data('text', delta=summary)
+        workspace = agent_ctx.get('workspace', {}) if isinstance(agent_ctx, dict) else {}
+        LOG.info(
+            f'[ReactAgent] [FORCE_SUMMARY_COMPLETED] sid={lazyllm_globals._sid} workspace_retained=True '
+            f'history_messages={len(workspace.get("history") or [])}'
+        )
+        return summary
+
+    def _clear_fc_chat_history(self) -> None:
+        if self._fc is not None:
+            locals['chat_history'][self._fc._llm._module_id] = []
+
     def _post_process(self, ret):
         if isinstance(ret, str):
             completed = self._pop_tool_calls()
             if completed is not None:
                 return completed
             return ret
-        if self._force_summarize:
-            try:
-                agent_ctx = locals['_lazyllm_agent']
-            except (KeyError, TypeError):
-                agent_ctx = {}
-            history = agent_ctx.get('workspace', {}).get('history', []) if isinstance(agent_ctx, dict) else []
-            if history:
-                LOG.warning(f'ReactAgent reached max_retries={self._max_retries}, attempting force summarize.')
-                summary = None
-                try:
-                    summary = self._force_summarize_from_history(history)
-                except Exception as e:
-                    LOG.warning(f'ReactAgent force-summarize call failed: {e}')
-                if summary is not None:
-                    if self._stream:
-                        _write_agent_data('text', delta=summary)
-                    workspace = agent_ctx.get('workspace', {}) if isinstance(agent_ctx, dict) else {}
-                    LOG.info(
-                        f'[ReactAgent] [FORCE_SUMMARY_COMPLETED] sid={lazyllm_globals._sid} workspace_retained=True '
-                        f'history_messages={len(workspace.get("history") or [])}'
-                    )
-                    if self._fc is not None: locals['chat_history'][self._fc._llm._module_id] = []
-                    return summary
-        if self._fc is not None: locals['chat_history'][self._fc._llm._module_id] = []
+        summary = self._force_summarize_after_limit()
+        self._clear_fc_chat_history()
+        if summary is not None:
+            return summary
         raise ValueError(f'After retrying {self._max_retries} times, the react agent still failes to call '
                          f'successfully.')
